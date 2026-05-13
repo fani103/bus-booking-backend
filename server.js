@@ -1,46 +1,93 @@
 require("dotenv").config();
 
-const express   = require("express");
-const cors      = require("cors");
+const express = require("express");
+const cors = require("cors");
 const connectDB = require("./config/db");
-
-connectDB();
 
 const app = express();
 
-app.use(cors({
-  origin: "*",
-  methods: ["GET", "POST", "PUT", "DELETE"],
+// DATABASE
+connectDB().catch((err) => {
+  console.error("MongoDB connection failed:", err.message);
+});
+
+// CORS
+const allowedOrigins = [
+  "http://localhost:3000",
+  "http://localhost:5173",
+  "http://localhost:5500",
+  "http://127.0.0.1:5500",
+  "https://bus-booking-frontend-virid.vercel.app",
+  "https://funtravels.vercel.app"
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    const isVercelPreview =
+      /^https:\/\/.*\.vercel\.app$/.test(origin);
+
+    if (
+      allowedOrigins.includes(origin) ||
+      isVercelPreview
+    ) {
+      return callback(null, true);
+    }
+
+    return callback(
+      new Error("Not allowed by CORS")
+    );
+  },
+
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// ── Routes ──────────────────────────────────────────────
-const busRoutes     = require("./routes/busRoutes");
-const bookingRoutes = require("./routes/bookingRoutes");
-const userRoutes    = require("./routes/userRoutes");
-const paymentRoutes = require("./routes/paymentRoutes");
+// ROUTES
+app.use("/api/buses", require("./routes/busRoutes"));
+app.use("/api/bookings", require("./routes/bookingRoutes"));
+app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/payment", require("./routes/paymentRoutes"));
 
-app.use("/api/buses",    busRoutes);
-app.use("/api/bookings", bookingRoutes);
-app.use("/api/users",    userRoutes);
-app.use("/api/payment",  paymentRoutes);
-
+// ROOT
 app.get("/", (req, res) => {
-  res.send("Fun Travels API is running 🚀");
+  res.status(200).json({
+    success: true,
+    message: "Fun Travels API Running"
+  });
 });
 
-// 404 handler
+// 404
 app.use((req, res) => {
-  res.status(404).json({ message: `Route not found: ${req.method} ${req.url}` });
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`
+  });
 });
 
-// Only listen locally — Vercel uses the exported app
+// ERROR
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+
+  res.status(500).json({
+    success: false,
+    message: "Internal Server Error"
+  });
+});
+
+// LOCAL ONLY
 if (process.env.NODE_ENV !== "production") {
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
